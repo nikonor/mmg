@@ -26,7 +26,7 @@ func CalculateCoefficients(players []*models.Player, roundNum int) {
 
 	// Update each player's total points
 	for _, p := range players {
-		mms := models.CalculateMCS(p.McMahonGroup, maxGroup)
+		mms := models.CalculateMMS(p.McMahonGroup, maxGroup)
 		earned := p.GetPointsEarned()
 		p.Points = mms + earned
 	}
@@ -57,7 +57,7 @@ func CalculateCoefficients(players []*models.Player, roundNum int) {
 			}
 
 			// Calculate opponent's total points
-			opponentMMS := models.CalculateMCS(opponent.McMahonGroup, maxGroup)
+			opponentMMS := models.CalculateMMS(opponent.McMahonGroup, maxGroup)
 			opponentEarned := opponent.GetPointsEarned()
 			opponentPoints := float64(opponentMMS + opponentEarned)
 

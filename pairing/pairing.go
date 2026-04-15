@@ -9,12 +9,12 @@ import (
 // MakePairs creates pairs for the current round according to McMahon/Swiss system rules
 // For round 1: pair within McMahon groups
 // For subsequent rounds: pair based on current points
-func MakePairs(players []*models.Player, roundNum int, totalRounds int) {
+func MakePairs(players []*models.Player, roundNum int) {
 	if roundNum == 1 {
 		makePairsRound1(players, roundNum)
-	} else {
-		makePairsSubsequent(players, roundNum)
+		return
 	}
+	makePairsSubsequent(players, roundNum)
 }
 
 // makePairsRound1 pairs players within their McMahon groups for the first round

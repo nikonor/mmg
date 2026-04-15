@@ -51,7 +51,7 @@ func ParseRoundResult(s string) RoundResult {
 		return RoundResult{OpponentID: 0, Win: nil}
 	}
 	if s == "X" {
-		return RoundResult{OpponentID: 0, IsBye: true, Win: ptrBool(true)}
+		return RoundResult{OpponentID: 0, IsBye: true, Win: new(true)}
 	}
 
 	parts := strings.Split(s, ":")
@@ -67,9 +67,9 @@ func ParseRoundResult(s string) RoundResult {
 	result := RoundResult{OpponentID: oppID}
 	switch parts[1] {
 	case "1":
-		result.Win = ptrBool(true)
+		result.Win = new(true)
 	case "0":
-		result.Win = ptrBool(false)
+		result.Win = new(false)
 	default:
 		result.Win = nil
 	}
@@ -120,33 +120,11 @@ func (p *Player) GetPointsEarned() int {
 
 // GetTotalPoints returns MMS + earned points
 func (p *Player) GetTotalPoints() int {
-	// MMS is calculated as (McMahonGroup - 1) from the weakest group perspective
-	// But in the CSV, Points field stores the total (MMS + earned)
-	// For sorting purposes, we need to recalculate
-	mms := p.GetMMS()
-	return mms + p.GetPointsEarned()
-}
-
-// GetMMS returns the starting McMahon score based on group
-func (p *Player) GetMMS() int {
-	// The weakest group (highest number) gets 0, strongest (1) gets (totalGroups - 1)
-	// We need to know total groups, but we store the effective MMS in a different way
-	// Actually, looking at the example: group 1 gets 3, group 2 gets 2, group 3 gets 1, group 4 gets 0
-	// So MMS = (maxGroup - currentGroup + 1) - 1 = maxGroup - currentGroup
-	// But we don't store maxGroup... Let me re-think.
-	// From the example: group 1 -> 3 points, group 4 -> 0 points
-	// It seems MMS = (totalGroups - groupNumber)
-	// But we need totalGroups. Let's store it differently.
-	// Actually, looking more carefully at the TZ:
-	// "Последняя группа получает 0 MMS. Каждая последующая группа получает +1"
-	// "первая группа получает (кол-во групп - 1) MMS"
-	// So if we know the group number and the total groups, MMS = totalGroups - groupNumber
-	// We'll need to pass totalGroups or store it. For now, let's use a helper.
-	return 0 // Will be set externally
+	return p.GetPointsEarned()
 }
 
 // CalculateMMS calculates MMS based on group number and total groups
-func CalculateMCS(group, totalGroups int) int {
+func CalculateMMS(group, totalGroups int) int {
 	return totalGroups - group
 }
 
@@ -175,8 +153,4 @@ func SortPlayersByRating(players []*Player) {
 	sort.SliceStable(players, func(i, j int) bool {
 		return players[i].Rating > players[j].Rating
 	})
-}
-
-func ptrBool(b bool) *bool {
-	return &b
 }

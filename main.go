@@ -115,7 +115,7 @@ func main() {
 		// Calculate initial MMS points
 		maxGroup := mcmahonGroups
 		for _, p := range players {
-			mms := models.CalculateMCS(p.McMahonGroup, maxGroup)
+			mms := models.CalculateMMS(p.McMahonGroup, maxGroup)
 			p.Points = mms // No earned points yet
 		}
 
@@ -126,7 +126,7 @@ func main() {
 
 		// Make pairs for the first round
 		fmt.Println("Making pairs for round 1...")
-		pairing.MakePairs(players, roundNum, totalRounds)
+		pairing.MakePairs(players, roundNum)
 
 		// Update places
 		scoring.UpdatePlaces(players)
@@ -156,7 +156,7 @@ func main() {
 
 		// Make pairs for the current round
 		fmt.Printf("Making pairs for round %d...\n", roundNum)
-		pairing.MakePairs(players, roundNum, totalRounds)
+		pairing.MakePairs(players, roundNum)
 
 		// Update places
 		scoring.UpdatePlaces(players)
