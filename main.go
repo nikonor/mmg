@@ -18,6 +18,7 @@ func main() {
 	if len(args) < 1 {
 		fmt.Println("Usage: mmg-tournament <base_filename> [total_rounds] [mcmahon_groups]")
 		fmt.Println("       mmg-tournament <base_filename> --round <round_num>")
+		fmt.Println("       mmg-tournament <base_filename> --final <total_rounds>")
 		os.Exit(1)
 	}
 
@@ -25,6 +26,7 @@ func main() {
 	var totalRounds int
 	var mcmahonGroups int
 	var roundNum int
+	var isFinal bool
 
 	// Parse optional arguments
 	i := 1
@@ -37,6 +39,9 @@ func main() {
 			}
 			roundNum, _ = strconv.Atoi(args[i+1])
 			i += 2
+		case "--final":
+			isFinal = true
+			i++
 		default:
 			// Try to parse as number
 			if val, err := strconv.Atoi(args[i]); err == nil {
@@ -49,6 +54,17 @@ func main() {
 			}
 			i++
 		}
+	}
+
+	// Handle final results mode
+	if isFinal {
+		if totalRounds == 0 {
+			fmt.Println("Error: --final requires total_rounds argument")
+			fmt.Println("Usage: mmg-tournament <base_filename> --final <total_rounds>")
+			os.Exit(1)
+		}
+		runFinal(baseFilename, totalRounds)
+		return
 	}
 
 	// Determine if this is the first round or a subsequent round
@@ -155,4 +171,68 @@ func main() {
 	}
 
 	fmt.Println("Done!")
+}
+
+// runFinal handles the final results calculation mode
+func runFinal(baseFilename string, totalRounds int) {
+	// Read the last round file (the one with all results)
+	inputFile := fmt.Sprintf("%s.%03d.csv", baseFilename, totalRounds)
+
+	fmt.Printf("Reading final tournament data from %s...\n", inputFile)
+	players, detectedRounds, err := csv_handler.ReadTournamentFile(inputFile)
+	if err != nil {
+		fmt.Printf("Error reading tournament file: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(players) == 0 {
+		fmt.Println("Error: No players found in the input file")
+		os.Exit(1)
+	}
+
+	fmt.Printf("Found %d players\n", len(players))
+
+	// Verify totalRounds matches
+	if detectedRounds != totalRounds {
+		fmt.Printf("Warning: detected %d rounds in file, but %d specified. Using %d.\n",
+			detectedRounds, totalRounds, totalRounds)
+	}
+
+	// Check that all results are entered
+	fmt.Printf("Checking that all %d rounds are played for all players...\n", totalRounds)
+	if err := scoring.CheckAllResultsPlayed(players, totalRounds); err != nil {
+		fmt.Printf("Error: Not all results are entered: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("All results verified!")
+
+	// Calculate final points and coefficients
+	fmt.Println("Calculating final points and coefficients...")
+	scoring.FinalizeCoefficients(players)
+
+	// Sort players according to final ranking rules
+	models.SortPlayers(players)
+
+	// Update places
+	scoring.UpdatePlaces(players)
+
+	// Write final results file
+	outputFile := fmt.Sprintf("%s.final.csv", baseFilename)
+	fmt.Printf("Writing final results to %s...\n", outputFile)
+	err = csv_handler.WriteTournamentFile(outputFile, players, totalRounds)
+	if err != nil {
+		fmt.Printf("Error writing output file: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("\n=== Final Tournament Results ===")
+	fmt.Printf("%-4s %-25s %5s %4s %6s %6s %6s\n",
+		"Место", "Имя", "Рейтинг", "Очки", "Бергер", "Бухгольц", "Группа")
+	fmt.Println("------------------------------------------------------------------------")
+	for _, p := range players {
+		fmt.Printf("%-4d %-25s %5d %4d %6.1f %6.1f %6d\n",
+			p.Place, p.Name, p.Rating, p.Points, p.Berger, p.Buchholz, p.McMahonGroup)
+	}
+
+	fmt.Println("\nDone!")
 }

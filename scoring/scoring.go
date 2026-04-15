@@ -1,6 +1,8 @@
 package scoring
 
 import (
+	"fmt"
+
 	"mmg-tournament/models"
 )
 
@@ -106,6 +108,40 @@ func AssignMcMahonGroups(players []*models.Player, numGroups int) {
 			players[currentIdx].McMahonGroup = group
 			currentIdx++
 		}
+	}
+}
+
+// CheckAllResultsPlayed verifies that all round results for all players have been entered.
+// It returns an error if any round result is missing or unplayed (Win == nil and not a bye).
+func CheckAllResultsPlayed(players []*models.Player, totalRounds int) error {
+	for _, p := range players {
+		if len(p.Results) < totalRounds {
+			return fmt.Errorf("игрок %s (ID=%d): недостаточно результатов (ожидается %d, имеется %d)",
+				p.Name, p.ID, totalRounds, len(p.Results))
+		}
+		for i := 0; i < totalRounds; i++ {
+			r := p.Results[i]
+			// Bye counts as played
+			if r.IsBye {
+				continue
+			}
+			// Check if result is unplayed
+			if !r.HasPlayed() {
+				return fmt.Errorf("игрок %s (ID=%d): тур %d не сыгран (результат: %s)",
+					p.Name, p.ID, i+1, r.String())
+			}
+		}
+	}
+	return nil
+}
+
+// FinalizeCoefficients recalculates points and coefficients after ALL rounds are complete.
+// This is similar to CalculateCoefficients but ensures final accurate state.
+func FinalizeCoefficients(players []*models.Player) {
+	// Reuse CalculateCoefficients with all rounds
+	roundNum := len(players[0].Results)
+	if roundNum > 0 {
+		CalculateCoefficients(players, roundNum)
 	}
 }
 
