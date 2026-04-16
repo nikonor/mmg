@@ -154,6 +154,12 @@ func ReadTournamentFile(filename string) ([]*models.Player, int, error) {
 		players = append(players, player)
 	}
 
+	// Validate tournament data consistency
+	validationResult := ValidateTournamentData(players, totalRounds)
+	if !validationResult.IsValid {
+		return players, totalRounds, fmt.Errorf("tournament data validation failed:%s", validationResult.ErrorString())
+	}
+
 	return players, totalRounds, nil
 }
 
