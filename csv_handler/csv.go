@@ -10,23 +10,38 @@ import (
 	"mmg-tournament/models"
 )
 
+// CSVHandler encapsulates CSV file operations with base filename and round number
+type CSVHandler struct {
+	baseFilename string
+	roundNum     int
+}
+
+// New creates a new CSVHandler
+func New(baseFilename string, roundNum int) *CSVHandler {
+	return &CSVHandler{
+		baseFilename: baseFilename,
+		roundNum:     roundNum,
+	}
+}
+
 // GetInputFilename returns the input filename based on base_filename and round_num
-func GetInputFilename(baseFilename string, roundNum int) string {
-	if roundNum <= 1 {
-		return baseFilename + ".csv"
+func (h *CSVHandler) GetInputFilename() string {
+	if h.roundNum <= 1 {
+		return h.baseFilename + ".csv"
 	}
 	// For round 2, we read base_filename.001.csv
-	prevRound := roundNum - 1
-	return fmt.Sprintf("%s.%03d.csv", baseFilename, prevRound)
+	prevRound := h.roundNum - 1
+	return fmt.Sprintf("%s.%03d.csv", h.baseFilename, prevRound)
 }
 
 // GetOutputFilename returns the output filename for the given round
-func GetOutputFilename(baseFilename string, roundNum int) string {
-	return fmt.Sprintf("%s.%03d.csv", baseFilename, roundNum)
+func (h *CSVHandler) GetOutputFilename() string {
+	return fmt.Sprintf("%s.%03d.csv", h.baseFilename, h.roundNum)
 }
 
 // ReadInitialPlayers reads the initial player list CSV (name,rating)
-func ReadInitialPlayers(filename string) ([]*models.Player, error) {
+func (h *CSVHandler) ReadInitialPlayers() ([]*models.Player, error) {
+	filename := h.GetInputFilename()
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %s: %w", filename, err)
@@ -64,7 +79,8 @@ func ReadInitialPlayers(filename string) ([]*models.Player, error) {
 
 // ReadTournamentFile reads a tournament CSV file with results
 // Returns players and the detected totalRounds (based on number of result columns)
-func ReadTournamentFile(filename string) ([]*models.Player, int, error) {
+func (h *CSVHandler) ReadTournamentFile() ([]*models.Player, int, error) {
+	filename := h.GetInputFilename()
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to open file %s: %w", filename, err)
@@ -154,8 +170,8 @@ func ReadTournamentFile(filename string) ([]*models.Player, int, error) {
 		players = append(players, player)
 	}
 
-	// Validate tournament data consistency
-	validationResult := ValidateTournamentData(players, totalRounds)
+	// Validate tournament data consistency up to previous round
+	validationResult := ValidateTournamentData(players, h.roundNum-1)
 	if !validationResult.IsValid {
 		return players, totalRounds, fmt.Errorf("tournament data validation failed:%s", validationResult.ErrorString())
 	}
@@ -164,7 +180,8 @@ func ReadTournamentFile(filename string) ([]*models.Player, int, error) {
 }
 
 // WriteTournamentFile writes the tournament state to a CSV file
-func WriteTournamentFile(filename string, players []*models.Player, totalRounds int) error {
+func (h *CSVHandler) WriteTournamentFile(players []*models.Player, totalRounds int) error {
+	filename := h.GetOutputFilename()
 	file, err := os.Create(filename)
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", filename, err)

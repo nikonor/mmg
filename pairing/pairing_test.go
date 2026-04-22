@@ -77,7 +77,7 @@ func TestFindUnpairedOpponent_AvoidsRepeatedPairings(t *testing.T) {
 	paired[p2.ID] = true
 
 	// P1 и p2 уже свели, не должны их сводить снова
-	result := findUnpairedOpponent(p1, players, paired)
+	result := findBestOpponent(p1, players, paired)
 	if result == p2 {
 		t.Error("Expected findUnpairedOpponent to skip already paired opponent")
 	}
@@ -126,7 +126,7 @@ func TestMakePairs_WithRepeatedOpponents_SkipsThem(t *testing.T) {
 	}
 
 	// После markings as paired, should skip them
-	result := findUnpairedOpponent(p1, candidates, paired)
+	result := findBestOpponent(p1, candidates, paired)
 	if result == nil {
 		t.Log("Expected to find unpaired opponent but none available")
 	}

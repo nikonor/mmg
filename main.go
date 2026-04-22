@@ -11,6 +11,15 @@ import (
 	"mmg-tournament/scoring"
 )
 
+// TournamentRepository defines the interface for tournament data persistence
+type TournamentRepository interface {
+	GetInputFilename() string
+	GetOutputFilename() string
+	ReadInitialPlayers() ([]*models.Player, error)
+	ReadTournamentFile() ([]*models.Player, int, error)
+	WriteTournamentFile(players []*models.Player, totalRounds int) error
+}
+
 func main() {
 	// Parse command line arguments
 	args := os.Args[1:]
@@ -80,17 +89,17 @@ func main() {
 		roundNum = 1
 	}
 
-	// Input and output filenames
-	inputFile := csv_handler.GetInputFilename(baseFilename, roundNum)
-	outputFile := csv_handler.GetOutputFilename(baseFilename, roundNum)
+	// Create CSV handler
+	handler := csv_handler.New(baseFilename, roundNum)
+	_ = TournamentRepository(handler) // Ensure CSVHandler implements TournamentRepository
 
 	var players []*models.Player
 	var err error
 
 	if isFirstRound {
 		// Read initial player list
-		fmt.Printf("Reading initial player list from %s...\n", inputFile)
-		players, err = csv_handler.ReadInitialPlayers(inputFile)
+		fmt.Printf("Reading initial player list from %s...\n", handler.GetInputFilename())
+		players, err = handler.ReadInitialPlayers()
 		if err != nil {
 			fmt.Printf("Error reading player list: %v\n", err)
 			os.Exit(1)
@@ -133,8 +142,8 @@ func main() {
 
 	} else {
 		// Subsequent round - read tournament file with results
-		fmt.Printf("Reading tournament data from %s...\n", inputFile)
-		players, totalRounds, err = csv_handler.ReadTournamentFile(inputFile)
+		fmt.Printf("Reading tournament data from %s...\n", handler.GetInputFilename())
+		players, totalRounds, err = handler.ReadTournamentFile()
 		if err != nil {
 			fmt.Printf("Error reading tournament file: %v\n", err)
 			os.Exit(1)
@@ -163,8 +172,8 @@ func main() {
 	}
 
 	// Write output file
-	fmt.Printf("Writing output to %s...\n", outputFile)
-	err = csv_handler.WriteTournamentFile(outputFile, players, totalRounds)
+	fmt.Printf("Writing output to %s...\n", handler.GetOutputFilename())
+	err = handler.WriteTournamentFile(players, totalRounds)
 	if err != nil {
 		fmt.Printf("Error writing output file: %v\n", err)
 		os.Exit(1)
@@ -176,10 +185,11 @@ func main() {
 // runFinal handles the final results calculation mode
 func runFinal(baseFilename string, totalRounds int) {
 	// Read the last round file (the one with all results)
-	inputFile := fmt.Sprintf("%s.%03d.csv", baseFilename, totalRounds)
+	handler := csv_handler.New(baseFilename, totalRounds)
+	inputFile := handler.GetInputFilename()
 
 	fmt.Printf("Reading final tournament data from %s...\n", inputFile)
-	players, detectedRounds, err := csv_handler.ReadTournamentFile(inputFile)
+	players, detectedRounds, err := handler.ReadTournamentFile()
 	if err != nil {
 		fmt.Printf("Error reading tournament file: %v\n", err)
 		os.Exit(1)
@@ -219,7 +229,7 @@ func runFinal(baseFilename string, totalRounds int) {
 	// Write final results file
 	outputFile := fmt.Sprintf("%s.final.csv", baseFilename)
 	fmt.Printf("Writing final results to %s...\n", outputFile)
-	err = csv_handler.WriteTournamentFile(outputFile, players, totalRounds)
+	err = handler.WriteTournamentFile(players, totalRounds)
 	if err != nil {
 		fmt.Printf("Error writing output file: %v\n", err)
 		os.Exit(1)

@@ -36,20 +36,38 @@ func makePairsRound1(players []*models.Player, roundNum int) {
 	for _, groupNum := range groupOrder {
 		groupPlayers := mcmahonGroups[groupNum]
 
-		for i := 0; i < len(groupPlayers); i++ {
-			if paired[groupPlayers[i].ID] {
+		// Collect unpaired candidates
+		var candidates []*models.Player
+		for _, p := range groupPlayers {
+			if !paired[p.ID] {
+				candidates = append(candidates, p)
+			}
+		}
+
+		// Sort by number of available opponents (least options first)
+		sort.Slice(candidates, func(i, j int) bool {
+			availI := countAvailableOpponents(candidates[i], candidates, paired)
+			availJ := countAvailableOpponents(candidates[j], candidates, paired)
+			if availI == availJ {
+				return candidates[i].ID < candidates[j].ID // stable sort
+			}
+			return availI < availJ
+		})
+
+		// Try to pair each player in order of difficulty
+		for _, player := range candidates {
+			if paired[player.ID] {
 				continue
 			}
 
-			pairedWith := findUnpairedOpponent(groupPlayers[i], groupPlayers, paired)
-
-			if pairedWith != nil {
-				setPairing(groupPlayers[i], pairedWith, roundNum)
-				paired[groupPlayers[i].ID] = true
-				paired[pairedWith.ID] = true
+			opponent := findBestOpponent(player, candidates, paired)
+			if opponent != nil {
+				setPairing(player, opponent, roundNum)
+				paired[player.ID] = true
+				paired[opponent.ID] = true
 			} else {
-				setBye(groupPlayers[i], roundNum)
-				paired[groupPlayers[i].ID] = true
+				setBye(player, roundNum)
+				paired[player.ID] = true
 			}
 		}
 	}
@@ -59,57 +77,128 @@ func makePairsRound1(players []*models.Player, roundNum int) {
 func makePairsSubsequent(players []*models.Player, roundNum int) {
 	paired := make(map[int]bool)
 
-	type pointsGroup struct {
-		points  int
-		players []*models.Player
-	}
-
-	var groups []pointsGroup
+	// Group by points
 	pointsMap := make(map[int][]*models.Player)
-
 	for _, p := range players {
 		pointsMap[p.Points] = append(pointsMap[p.Points], p)
 	}
 
-	pointsVals := make([]int, 0, len(pointsMap))
+	// Sort point groups in descending order
+	var pointsVals []int
 	for pts := range pointsMap {
 		pointsVals = append(pointsVals, pts)
 	}
 	sort.Sort(sort.Reverse(sort.IntSlice(pointsVals)))
 
+	// First pass: maximize internal pairings in each group
 	for _, pts := range pointsVals {
-		groups = append(groups, pointsGroup{points: pts, players: pointsMap[pts]})
+		groupPlayers := pointsMap[pts]
+		pairWithinGroup(groupPlayers, paired, roundNum)
 	}
 
-	for gi := 0; gi < len(groups); gi++ {
-		groupPlayers := groups[gi].players
+	// Second pass: handle leftovers by pairing with lower-score groups
+	for i, pts := range pointsVals {
+		var unpairedInGroup []*models.Player
+		for _, p := range pointsMap[pts] {
+			if !paired[p.ID] {
+				unpairedInGroup = append(unpairedInGroup, p)
+			}
+		}
 
-		for i := 0; i < len(groupPlayers); i++ {
-			if paired[groupPlayers[i].ID] {
+		for _, player := range unpairedInGroup {
+			if paired[player.ID] {
 				continue
 			}
 
-			pairedWith := findUnpairedOpponent(groupPlayers[i], groupPlayers, paired)
-
-			if pairedWith == nil {
-				for gj := gi + 1; gj < len(groups); gj++ {
-					pairedWith = findUnpairedOpponent(groupPlayers[i], groups[gj].players, paired)
-					if pairedWith != nil {
-						break
-					}
+			var opponent *models.Player
+			// Search only in lower groups (i+1 and below)
+			for j := i + 1; j < len(pointsVals); j++ {
+				lowerGroup := pointsMap[pointsVals[j]]
+				opponent = findBestOpponent(player, lowerGroup, paired)
+				if opponent != nil {
+					break
 				}
 			}
 
-			if pairedWith != nil {
-				setPairing(groupPlayers[i], pairedWith, roundNum)
-				paired[groupPlayers[i].ID] = true
-				paired[pairedWith.ID] = true
+			if opponent != nil {
+				setPairing(player, opponent, roundNum)
+				paired[player.ID] = true
+				paired[opponent.ID] = true
 			} else {
-				setBye(groupPlayers[i], roundNum)
-				paired[groupPlayers[i].ID] = true
+				setBye(player, roundNum)
+				paired[player.ID] = true
 			}
 		}
 	}
+}
+
+// pairWithinGroup tries to pair as many players as possible within the same score group
+// Uses difficulty-based sorting: players with fewer possible opponents go first
+func pairWithinGroup(groupPlayers []*models.Player, paired map[int]bool, roundNum int) {
+	var candidates []*models.Player
+	for _, p := range groupPlayers {
+		if !paired[p.ID] {
+			candidates = append(candidates, p)
+		}
+	}
+
+	// Sort by number of available opponents (least options first)
+	sort.Slice(candidates, func(i, j int) bool {
+		availI := countAvailableOpponents(candidates[i], candidates, paired)
+		availJ := countAvailableOpponents(candidates[j], candidates, paired)
+		if availI == availJ {
+			return candidates[i].ID < candidates[j].ID // stable sort
+		}
+		return availI < availJ
+	})
+
+	// Try to pair each player in order of difficulty
+	for _, player := range candidates {
+		if paired[player.ID] {
+			continue
+		}
+
+		opponent := findBestOpponent(player, candidates, paired)
+		if opponent != nil {
+			setPairing(player, opponent, roundNum)
+			paired[player.ID] = true
+			paired[opponent.ID] = true
+		}
+	}
+}
+
+// countAvailableOpponents returns how many unpaired players this player can face
+func countAvailableOpponents(player *models.Player, candidates []*models.Player, paired map[int]bool) int {
+	count := 0
+	for _, c := range candidates {
+		if paired[c.ID] || c.ID == player.ID {
+			continue
+		}
+		if !havePlayed(player, c) {
+			count++
+		}
+	}
+	return count
+}
+
+// findBestOpponent finds an opponent who hasn't played against the player
+// Prefers players with fewer remaining options (to avoid stranding them)
+func findBestOpponent(player *models.Player, candidates []*models.Player, paired map[int]bool) *models.Player {
+	var best *models.Player
+	minOptions := int(^uint(0) >> 1) // MaxInt
+
+	for _, c := range candidates {
+		if paired[c.ID] || c.ID == player.ID || havePlayed(player, c) {
+			continue
+		}
+
+		options := countAvailableOpponents(c, candidates, paired)
+		if best == nil || options < minOptions {
+			best = c
+			minOptions = options
+		}
+	}
+	return best
 }
 
 // setPairing sets up the round result for both players
@@ -144,23 +233,6 @@ func setBye(player *models.Player, roundNum int) {
 		IsBye:      true,
 		Win:        ptrBool(true),
 	}
-}
-
-// findUnpairedOpponent finds the next unpaired opponent that the player hasn't played yet
-func findUnpairedOpponent(player *models.Player, candidates []*models.Player, paired map[int]bool) *models.Player {
-	for _, candidate := range candidates {
-		if paired[candidate.ID] || candidate.ID == player.ID {
-			continue
-		}
-
-		if havePlayed(player, candidate) {
-			continue
-		}
-
-		return candidate
-	}
-
-	return nil
 }
 
 // havePlayed checks if two players have already played each other in previous rounds
